@@ -1,0 +1,1 @@
+"""Connector base interfaces."""

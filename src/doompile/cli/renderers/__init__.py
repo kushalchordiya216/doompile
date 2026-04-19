@@ -1,0 +1,1 @@
+"""Terminal output rendering helpers."""
