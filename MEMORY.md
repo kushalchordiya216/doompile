@@ -100,21 +100,148 @@ Preferences:
 - Prefix all future additions or edits in `MEMORY.md` with the date they were made.
 - Record daily brainstorming, major decisions, and plan snapshots under `archive/YYYY-MM-DD.md`.
 
-## [2026-04-18] Next Up
-1. Define the core interfaces in `src/doompile/`:
-   - `Connector`
-   - `ModelRouter`
-   - `SearchProvider`
-   - `OCRProvider`
-   - `Tracer`
-2. Design the SQLite schema for the first durable storage layer.
-3. Implement the first real Twitter import path, likely starting with `pile import twitter <path>`.
-4. Preserve nested source signals from the raw Twitter export during normalization.
-5. Build toward source candidate extraction immediately after import.
+## [2026-04-27] Completed
+- Schema design finalized and implemented in `src/doompile/db/models/tables.py`
+- All models renamed for clarity (`Artifact` → `ImportItem`, etc.)
+- Added `concept_aliases`, `connector_version`, media `local_path`, step order indexes, field comments
+- Fixed `datetime.utcnow` deprecation
+- Added `init-db` CLI subcommand
+- All files pass `ruff check` and `ty check`
+- PR #1 opened with all schema and documentation changes
 
-## [2026-04-19] Ingestion Spec
-- Added `docs/ingestion-pipeline-spec.md` as the implementation spec for the first ingestion slice.
-- The ingestion boundary now explicitly ends at `ResourceCandidate` creation and artifact review state assignment.
-- Import v1 is deterministic and rule-based. It must not call `ModelRouter`.
-- Reimports must create a new `ImportRun` row while upserting artifacts by `(connector_kind, connector_artifact_id)`.
-- The first required CLI contract is `pile import twitter <path>`.
+## [2026-04-27] Next Up — Full Roadmap to Usable CLI
+
+Below is the complete step-by-step sequence from the current state to the point where you can run `pile` to learn and track progress.
+
+### Step 0: Merge Foundation (now)
+- [ ] Review and merge PR #1 (`feature/schema-and-docs-refinement`)
+- [ ] Verify `pile init-db` creates `~/.doompile/doompile.db` correctly
+
+### Step 1: Core Interfaces (1–2 sessions)
+- [ ] `Connector` protocol — `ingest(path) → list[ImportItem]`
+- [ ] `ModelRouter` abstraction — unified LLM call interface with provider adapters
+- [ ] `Tracer` abstraction — Langfuse integration for structured logging and LLM tracing
+- [ ] Register these in `src/doompile/{connectors,ai,tracing}/`
+
+### Step 2: SQLite Schema + Repositories (1 session)
+- [ ] Merge `tables.py` (done in PR #1)
+- [ ] Add basic repositories / query helpers for:
+  - `ImportRun`, `ImportItem`, `ImportItemMedia`
+  - `Resource`, `Concept`, `ConceptAlias`
+  - `LearningGoal`, `LearningPath`, `LearningPathStep`
+  - `ProgressRecord`
+
+### Step 3: Twitter Import + Normalization (2–3 sessions)
+- [ ] Implement `TwitterBookmarksConnector`
+- [ ] Parse `bookmarks.json` (the full 164K-line source of truth)
+- [ ] Extract hidden source signals:
+  - `note_tweet` inline URLs
+  - `legacy.entities.urls` t.co expansions
+  - `quoted_status` and `retweeted_status` nested links
+  - `article` metadata (title, description, URL)
+- [ ] CLI command: `pile import twitter <path>`
+- [ ] Store normalized results in `import_items`, `import_item_media`, `import_runs`
+- [ ] Reimports must upsert by `(connector_kind, connector_item_id)` and create new `ImportRun` rows
+
+### Step 4: Source Candidate Extraction (2–3 sessions)
+- [ ] Build candidate extraction from normalized import items
+- [ ] Implement `ResourceCandidate` logic inside `resources` table with `status = candidate`
+- [ ] Derivation strategies:
+  - direct URL from tweet text/entities
+  - URL from quoted/retweeted tweet
+  - article link from Twitter article metadata
+  - media bookmark (flag for later OCR)
+- [ ] Confidence scoring (rule-based for v1, deterministic, no LLM)
+- [ ] CLI command: `pile resolve` (batch candidate extraction)
+
+### Step 5: Review Queue (2 sessions)
+- [ ] Build review queue for low-confidence candidates
+- [ ] CLI command: `pile review` — interactive TUI or prompt-driven review
+- [ ] Actions per item:
+  - accept candidate → `status = accepted`
+  - reject candidate → `status = rejected`
+  - edit URL/title manually
+  - skip for now
+- [ ] Review must be resumable (store review state on `ImportItem` or `Resource`)
+
+### Step 6: Resource Enrichment (3–4 sessions)
+- [ ] For each accepted resource, fetch or infer metadata
+- [ ] Fields to populate:
+  - `resource_type`: article, video, course, paper, repo, thread, book, unknown
+  - `title` (fallback to `title_hint` if fetch fails)
+  - `summary` (AI-generated, one paragraph)
+  - `difficulty` and `role` (AI-assisted, but human-reviewable)
+- [ ] Extract concepts from resource content/summary
+- [ ] Match concepts to `concepts` table via `concept_aliases` (exact/case-insensitive)
+- [ ] Create new concepts eagerly when no alias match
+- [ ] Populate `resource_concepts` join table
+- [ ] CLI command: `pile enrich [--resource-id <id> | --all]`
+
+### Step 7: Learning Path Generation (2–3 sessions)
+- [ ] CLI command: `pile plan "<goal text>"`
+- [ ] Planning profile: `Veteran Builder` (opinionated, fundamentals-first, small set of strong resources)
+- [ ] Inputs:
+  - user goal text
+  - accepted + enriched resources matching relevant concepts
+  - difficulty/role signals
+- [ ] Output: `LearningPath` + ordered `LearningPathStep`s
+- [ ] Each step links to a primary resource and optionally suggests alternatives
+- [ ] Include exercise/toy-project prompts per step where possible
+- [ ] Store paths in `learning_paths`, `learning_path_steps`
+- [ ] CLI command: `pile paths` to list active paths, `pile path <id>` to inspect
+
+### Step 8: Progress Tracking (2 sessions)
+- [ ] CLI command: `pile start <path_id>` — mark path as active
+- [ ] CLI command: `pile done <step_id>` — mark step completed
+- [ ] CLI command: `pile progress` — show active paths and completion stats
+- [ ] CLI command: `pile next` — suggest the next uncompleted step from the active path
+- [ ] Store progress in `progress_records` (subject_type: path, step, resource)
+- [ ] Support notes on progress entries (e.g. "read half, will finish tomorrow")
+
+### Step 9: Polish + Fallbacks (2–3 sessions)
+- [ ] Add `pile stats` — corpus summary (total bookmarks, recovered resources, active paths, completion rate)
+- [ ] Implement OCR fallback for media-heavy bookmarks (Phase 7 from spec)
+- [ ] Implement web search fallback for unresolved screenshots
+- [ ] Add `--dry-run` to `pile import` and `pile enrich`
+- [ ] Improve error messages and logging
+- [ ] Add `pile config` to show/set DB path, planning profile, model provider
+
+### Step 10: First Real Learning Loop (1 session)
+- [ ] End-to-end test with real bookmarks:
+  1. `pile init-db`
+  2. `pile import twitter bookmarks.json`
+  3. `pile resolve`
+  4. `pile review` (accept/reject candidates)
+  5. `pile enrich --all`
+  6. `pile plan "learn enough compilers to build a toy compiler"`
+  7. `pile start <path_id>`
+  8. `pile next`
+  9. `pile done <step_id>`
+  10. `pile progress`
+- [ ] Fix any critical UX or data bugs found during end-to-end
+
+### Completion Criteria
+You can confidently run:
+```bash
+pile import twitter bookmarks.json
+pile resolve && pile review
+pile enrich --all
+pile plan "learn distributed systems"
+pile start <path_id>
+pile next   # tells you what to study
+pile done   # marks completion
+pile progress
+```
+
+At this point the product is **minimally usable for personal learning and progress tracking**.
+
+## [2026-04-27] Deferred Beyond Usable CLI
+- Alembic migrations (schema is still evolving)
+- Dashboard/web UI
+- Semantic search and vector store
+- Tutoring assistant / Q&A layer
+- Graph visualization
+- Fuzzy alias disambiguation (exact match only for v1)
+- Social/sharing features
+- Multi-user support
+
