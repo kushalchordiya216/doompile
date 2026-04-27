@@ -111,3 +111,10 @@ Preferences:
 3. Implement the first real Twitter import path, likely starting with `pile import twitter <path>`.
 4. Preserve nested source signals from the raw Twitter export during normalization.
 5. Build toward source candidate extraction immediately after import.
+
+## [2026-04-19] Ingestion Spec
+- Added `docs/ingestion-pipeline-spec.md` as the implementation spec for the first ingestion slice.
+- The ingestion boundary now explicitly ends at `ResourceCandidate` creation and artifact review state assignment.
+- Import v1 is deterministic and rule-based. It must not call `ModelRouter`.
+- Reimports must create a new `ImportRun` row while upserting artifacts by `(connector_kind, connector_artifact_id)`.
+- The first required CLI contract is `pile import twitter <path>`.

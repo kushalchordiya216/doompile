@@ -1,1 +1,1 @@
-"""Artifact normalization and ingest workflows."""
+"""Import item normalization and ingest workflows."""
