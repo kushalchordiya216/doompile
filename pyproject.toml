@@ -8,7 +8,9 @@ version = "0.1.0"
 description = "CLI-first learning planner built from saved resources"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "sqlalchemy>=2.0",
+]
 
 [project.scripts]
 pile = "doompile.cli.app:main"
@@ -23,3 +25,11 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.12",
+]
+
+[project.optional-dependencies]
+dev = ["ty"]

@@ -42,6 +42,41 @@ Twitter bookmarks are the first connector and main distribution story, but the a
 - Prefer explicit data models and validated boundaries over loosely typed dict plumbing.
 - Keep functions small, composable, and easy to test.
 
+### uv Package Management Commands
+
+Always use `uv` commands for package management. Never use `pip` directly.
+
+```bash
+# Add a package dependency to pyproject.toml and sync
+uv add <package>
+
+# Add multiple packages at once
+uv add requests flask ruff
+
+# Add a package with optional dependencies
+uv add "flask[dotenv]"
+
+# Add a package with version constraint
+uv add 'ruff>=0.2.0'
+
+# Remove a package from pyproject.toml and sync
+uv remove <package>
+
+# Install current project as editable (during development)
+uv pip install -e .
+
+# Uninstall a package
+uv pip uninstall <package>
+
+# Sync all dependencies from pyproject.toml
+uv sync
+```
+
+Key principles:
+- `uv add` and `uv remove` modify `pyproject.toml` and sync the environment
+- `uv pip install` is for pip-compatible operations (editable installs, requirements files)
+- Never manually edit `pyproject.toml` for dependencies - use `uv add`/`uv remove`
+
 ## Git And Delivery Workflow
 - Prefer trunk-based development.
 - Do not create unnecessary branches.
